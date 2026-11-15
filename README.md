@@ -121,19 +121,42 @@ python -m vsynth sync song.wav --bass-zoom 0.4 --high-glitch 0.2 --high-rgb 0 --
 | `--high-rgb` | 0.3 | 高音 | RGB ずれ |
 | `--kick-flash` | 0.15 | キック | 明るさのフラッシュ |
 | `--mid-hue` | 0 | 中音 (エレピ・パッドなど) | 色相がゆっくり回る |
+| `--note-pulse` | 0.3 | エレピ・鍵盤のノート (中音域のアタック) | 映像がふわっと明るく広がる (呼吸する) |
+| `--chord-hue` | 0.4 | コードチェンジ (鳴っている音程の変化) | コードが変わるたびに色がなめらかに移る |
 | `--sensitivity` | 0 | — | アタック検出の感度。ドラムが控えめな曲は 0.5〜1 に上げる |
 
-- 曲は書き出し前に **全体を一度解析** します。音量は曲全体を基準にそろえるので、静かなイントロでは控えめに、サビでは大きく動きます。途中の小節だけを書き出しても、通しで書き出したときと同じ動きになります (編集でつないでもずれません)。
+- 曲は書き出し前に **全体を一度解析** します。音量は曲全体を基準にそろえるので、静かなイントロでは控えめに、サビでは大きく動きます。アタック (キック・ハイハット・ノート) の検出は前後 8 秒ごとに基準を取り直すので、ドラムのない静かなイントロでもエレピのノートやコードチェンジを拾います。途中の小節だけを書き出しても、通しで書き出したときと同じ動きになります (編集でつないでもずれません)。
 - `render --music song.wav` でも同じ `--bass-zoom` などのオプションが使えます (`render` の既定値はすべて 0)。
 - `--preset` `--set` で決めた見た目に、音の反応が上乗せされます。ライブモードで見た目を作り (`Shift+F1`)、`sync song.wav --preset 1` で書き出す流れがおすすめです。
 - `--start-bar` / `--scenes` を小節で合わせるには、DAW で **1 小節目の頭から** 書き出してください (前に無音があるとずれます)。
+
+**曲の一部だけ反応を変える (`--section`)**
+
+`--section 範囲:名前=値,...` で、小節 (要 `--bpm`) か秒の範囲ごとに反応を変えられます。何回でも指定でき、後に書いたものが優先されます。
+
+| 名前 | 意味 |
+|---|---|
+| `gain` | その範囲の音を持ち上げて反応させる倍率 (静かなイントロは 2〜3) |
+| `sensitivity` | その範囲のアタック検出の感度 |
+| 上の表の名前 (`note_pulse` `chord_hue` `bass_zoom` `high_glitch` …) | その範囲だけの反応の強さ |
+
+```bash
+# 自作したイントロ (1〜40 小節) はエレピとコードに大きく反応させ、グリッチは出さない。
+# 41 小節目からは通常の設定
+python -m vsynth sync song.wav --bpm 120 \
+  --section 1-40:gain=2.5,sensitivity=1,note_pulse=0.7,chord_hue=0.8,high_glitch=0
+
+# 秒で指定する場合は s を付ける
+python -m vsynth sync song.wav --section 0s-80s:gain=2,note_pulse=0.6
+```
 
 **アンビエント寄りの曲の例** (ドラム控えめ、エレピとパッドが主役):
 
 ```bash
 python -m vsynth sync song.wav --bpm 120 --scene flow \
   --set speed=0.5 --set feedback=0.85 --set sat=0.7 \
-  --bass-zoom 0.15 --high-glitch 0.15 --high-rgb 0.1 --mid-hue 0.4 --sensitivity 0.8
+  --bass-zoom 0.15 --high-glitch 0.15 --high-rgb 0.1 --mid-hue 0.4 --sensitivity 0.8 \
+  --section 1-40:gain=2.5,note_pulse=0.7,chord_hue=0.8,high_glitch=0
 ```
 
 ## 撮影のコツ

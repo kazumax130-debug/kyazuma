@@ -10,13 +10,16 @@ from . import media
 from .engine import Engine, State, create_headless_context
 from .params import Params, PresetBank
 from .shaders import SCENE_NAMES
-from .sync import Modulator, Reactivity
-
-REACT_KEYS = tuple(Reactivity.__dataclass_fields__)
+from .sync import REACT_KEYS, Modulator, Plan, Reactivity, parse_section
 
 
-def reactivity_from_args(args):
-    return Reactivity(**{k: getattr(args, k, None) or 0.0 for k in REACT_KEYS})
+def plan_from_args(args, bar=None):
+    base = Reactivity(**{k: getattr(args, k, None) or 0.0 for k in REACT_KEYS})
+    try:
+        sections = [parse_section(t, bar) for t in getattr(args, "section", None) or []]
+    except ValueError as e:
+        raise SystemExit(f"--section {e}") from None
+    return Plan(base, sections, sensitivity=getattr(args, "sensitivity", 0.0) or 0.0)
 
 
 def bar_seconds(args):
@@ -99,10 +102,14 @@ def run(args):
     duration = args.duration or (track.duration - start if track else 10.0)
     if track:
         duration = min(duration, track.duration - start)
+    plan = plan_from_args(args, bar)
+    s0 = None
+    mod = None
+    if track:
         print("音を解析中...", flush=True)
-        feats = track.features(args.fps, start, duration, getattr(args, "sensitivity", 0.0) or 0.0)
-    react = reactivity_from_args(args)
-    mod = Modulator(react) if feats and react.active() else None
+        feats = track.features(args.fps, plan.sensitivity)
+        s0 = feats.frame(start)
+        mod = Modulator(plan, feats) if plan.active() else None
 
     movie = None
     if args.input_video:
@@ -125,18 +132,22 @@ def run(args):
     auto_last = 0.0
     t0 = time.perf_counter()
     if mod:
-        on = ", ".join(f"{k}={v:g}" for k, v in vars(react).items() if v)
-        print(f"音への反応: {on}")
+        on = ", ".join(f"{k}={v:g}" for k, v in vars(plan.base).items() if v)
+        print(f"音への反応: {on or '(セクション指定のみ)'}")
+        for sec in plan.sections:
+            vals = ", ".join(f"{k}={v:g}" for k, v in sec.values.items())
+            print(f"  {sec.start:7.1f}s - {sec.end:7.1f}s: {vals}")
     print(f"レンダリング {engine.size[0]}x{engine.size[1]} {args.fps}fps {duration:.1f}s "
           f"({n} フレーム) -> {out}")
     try:
         for i in range(n):
             t = start + i * dt  # song time, so --scenes lines up with the song
-            audio = feats.bands(i) if feats else (0.0, 0.0, 0.0)
+            j = s0 + i if feats else 0  # frame index in the whole song
+            audio = feats.bands(j, plan.at(t)[1]) if feats else (0.0, 0.0, 0.0)
             if timeline:
                 state.set_scene(scene_at(timeline, t))
             elif args.auto:
-                hit = feats is not None and feats.kick[i] > 0.9 and t - auto_last > 2.0
+                hit = feats is not None and feats.kick[min(j, feats.n - 1)] > 0.9 and t - auto_last > 2.0
                 if hit or t - auto_last > args.auto_interval:
                     state.set_scene(rng.choice([s for s in SCENE_NAMES if s != state.scene]))
                     params.set("hue", rng.random())
@@ -147,7 +158,7 @@ def run(args):
             params.update(dt)
             state.advance(dt, params)
             if mod:
-                with mod.apply(params, feats.at(i), dt):
+                with mod.apply(params, j):
                     engine.render(params, state, audio)
                     frame = engine.read_frame(params)
             else:

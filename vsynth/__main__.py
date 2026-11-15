@@ -26,7 +26,8 @@ def param_assign(text):
 
 # How strongly `sync` reacts to the music when nothing is specified.
 SYNC_DEFAULTS = {"bass_zoom": 0.25, "bass_fb": 0.3, "high_glitch": 0.45, "high_rgb": 0.3,
-                 "kick_flash": 0.15, "mid_hue": 0.0, "bass_warp": 0.0, "scene": "flow",
+                 "kick_flash": 0.15, "mid_hue": 0.0, "bass_warp": 0.0,
+                 "note_pulse": 0.3, "chord_hue": 0.4, "scene": "flow",
                  "fps": 30, "glide": 2.0}
 
 
@@ -67,6 +68,12 @@ def main(argv=None):
     g.add_argument("--high-rgb", type=float, help="高音で RGB ずれ (0〜1)")
     g.add_argument("--kick-flash", type=float, help="キックで明るさをフラッシュ (0.2 = +20%%)")
     g.add_argument("--mid-hue", type=float, help="中音で色相をゆっくり回す (0〜1)")
+    g.add_argument("--note-pulse", type=float, help="エレピ・鍵盤のノートで映像が呼吸する (0〜1)")
+    g.add_argument("--chord-hue", type=float, help="コードが変わるたびに色が移る (0〜1)")
+    g.add_argument("--section", action="append", metavar="範囲:名前=値,...",
+                   help="曲の一部だけ反応を変える (複数可)。例: --section 1-40:gain=2.5,note_pulse=0.6 "
+                        "(小節, 要 --bpm) / --section 0s-80s:sensitivity=1 (秒)。"
+                        "名前は上の反応の名前と gain (音量を持ち上げる倍率), sensitivity")
     g.add_argument("--sensitivity", type=float, default=0.0,
                    help="アタック検出の感度 (-0.5〜2, 大きいほど小さな音にも反応)")
     g = react.add_argument_group("曲の範囲・テンポ")
