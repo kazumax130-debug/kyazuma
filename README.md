@@ -88,6 +88,54 @@ python -m vsynth render --input-video dance.mp4 --cam-mode 2 --scene kaleido
 
 1 フレームずつ計算するので、PC が遅くても書き出した動画はなめらかです。
 
+### 3. 曲に同期した MV 素材を書き出す (`sync`)
+
+DAW から書き出した曲 (WAV / AIFF / mp3 / m4a) を指定すると、音に合わせて動く映像を音声付きの MP4 で書き出します。
+
+```bash
+# いちばん簡単な使い方: recordings/<曲名>_vsynth.mp4 ができる (1080p 30fps)
+python -m vsynth sync song.wav
+
+# まず軽い解像度でプレビュー → OK なら 4K で本番
+python -m vsynth sync song.wav --size 960x540
+python -m vsynth sync song.wav --size 3840x2160 --codec prores
+
+# テンポを指定すると小節で指定できる (例: 120 BPM の 41 小節目から 8 小節だけ)
+python -m vsynth sync song.wav --bpm 120 --start-bar 41 --bars 8
+
+# 小節単位でシーンを進める (イントロ 40 小節は flow、次の 16 小節は kaleido ...)
+python -m vsynth sync song.wav --bpm 120 --scenes flow:40,kaleido:16,tunnel:16,flow:24
+
+# 反応の強さを調整 (0 にするとその反応は無効)
+python -m vsynth sync song.wav --bass-zoom 0.4 --high-glitch 0.2 --high-rgb 0 --kick-flash 0.1
+```
+
+**音と映像の対応**
+
+| オプション | 既定値 | 反応する音 | 映像の変化 |
+|---|---|---|---|
+| `--bass-zoom` | 0.25 | 低音・キック | ズームイン (0.3 で最大 +30%) |
+| `--bass-fb` | 0.3 | 低音・キック | フィードバックがトンネル状に吸い込まれる |
+| `--bass-warp` | 0 | 低音 | 歪みが強くなる |
+| `--high-glitch` | 0.45 | ハイハット・ゴーストノートなど高音のアタック | 横ずれのグリッチ |
+| `--high-rgb` | 0.3 | 高音 | RGB ずれ |
+| `--kick-flash` | 0.15 | キック | 明るさのフラッシュ |
+| `--mid-hue` | 0 | 中音 (エレピ・パッドなど) | 色相がゆっくり回る |
+| `--sensitivity` | 0 | — | アタック検出の感度。ドラムが控えめな曲は 0.5〜1 に上げる |
+
+- 曲は書き出し前に **全体を一度解析** します。音量は曲全体を基準にそろえるので、静かなイントロでは控えめに、サビでは大きく動きます。途中の小節だけを書き出しても、通しで書き出したときと同じ動きになります (編集でつないでもずれません)。
+- `render --music song.wav` でも同じ `--bass-zoom` などのオプションが使えます (`render` の既定値はすべて 0)。
+- `--preset` `--set` で決めた見た目に、音の反応が上乗せされます。ライブモードで見た目を作り (`Shift+F1`)、`sync song.wav --preset 1` で書き出す流れがおすすめです。
+- `--start-bar` / `--scenes` を小節で合わせるには、DAW で **1 小節目の頭から** 書き出してください (前に無音があるとずれます)。
+
+**アンビエント寄りの曲の例** (ドラム控えめ、エレピとパッドが主役):
+
+```bash
+python -m vsynth sync song.wav --bpm 120 --scene flow \
+  --set speed=0.5 --set feedback=0.85 --set sat=0.7 \
+  --bass-zoom 0.15 --high-glitch 0.15 --high-rgb 0.1 --mid-hue 0.4 --sensitivity 0.8
+```
+
 ## 撮影のコツ
 
 **画面をカメラで撮る場合 (モニター、プロジェクター、LED)**

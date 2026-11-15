@@ -29,6 +29,8 @@ class VideoWriter:
         import imageio_ffmpeg
 
         ff_codec, _, pix_fmt, extra = CODECS[codec]
+        if audio_path:
+            extra = extra + ["-shortest"]  # never let the sound run past the last frame
         self.path = path
         self.gen = imageio_ffmpeg.write_frames(
             path, size, fps=fps, codec=ff_codec, pix_fmt_in="rgb24", pix_fmt_out=pix_fmt,
