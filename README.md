@@ -18,7 +18,15 @@ pip install sounddevice            # マイクの音に反応させる場合
 pip install opencv-python          # Webカメラを合成する場合
 ```
 
-OpenGL 3.3 が動く PC なら動きます (Mac / Windows / Linux)。
+Python 3.10 以上、OpenGL 3.3 が動く PC なら動きます (Mac / Windows / Linux)。
+動画の書き出しに使う FFmpeg は `imageio-ffmpeg` に同梱されているので、別にインストールする必要はありません。
+
+ディスプレイのない Linux サーバーで `render` やテストを動かすときは、Xvfb の仮想画面を使います。
+
+```bash
+sudo apt install xvfb
+xvfb-run -a -s "-screen 0 1280x720x24" python -m vsynth render --duration 10
+```
 
 ## 使い方
 
@@ -117,9 +125,24 @@ void main() {
 }
 ```
 
+## ファイル構成
+
+| ファイル | 役割 |
+|---|---|
+| `vsynth/__main__.py` | コマンドライン (`live` / `render`) |
+| `vsynth/shaders.py` | シーンの GLSL シェーダー |
+| `vsynth/engine.py` | GPU 描画エンジン (ライブと書き出しで共通) |
+| `vsynth/params.py` | パラメータのなめらかな変化とプリセット保存 |
+| `vsynth/live.py` | ライブ演奏ウィンドウ (キーボード操作・録画) |
+| `vsynth/render.py` | 高解像度の書き出し・音楽との同期 |
+| `vsynth/audio.py` | 音の解析 (低音・中音・高音のレベル) |
+| `vsynth/media.py` | 動画の書き出しと、カメラ・動画の読み込み |
+
 ## テスト
 
 ```bash
 pip install pytest
 python -m pytest
 ```
+
+OpenGL が使えない環境では描画のテストがスキップされます。Linux サーバーでは `xvfb-run -a python -m pytest` で全部のテストが動きます。
