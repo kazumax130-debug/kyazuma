@@ -24,6 +24,13 @@ def param_assign(text):
     return text
 
 
+# How strongly `sync` reacts to the music when nothing is specified.
+SYNC_DEFAULTS = {"bass_zoom": 0.25, "bass_fb": 0.3, "high_glitch": 0.45, "high_rgb": 0.3,
+                 "kick_flash": 0.15, "mid_hue": 0.0, "bass_warp": 0.0,
+                 "note_pulse": 0.3, "chord_hue": 0.4, "scene": "flow",
+                 "fps": 30, "glide": 2.0}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="vsynth", description="Python ヴィジュアルシンセサイザー")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -52,21 +59,54 @@ def main(argv=None):
     lv.add_argument("--fixed-step", action="store_true",
                     help="録画中は1フレーム=1/fps秒で進める (重い設定でもカクつかない動画に)")
 
-    rd = sub.add_parser("render", parents=[common], help="高解像度で動画ファイルに書き出し")
-    rd.add_argument("--size", type=size, default=(1920, 1080), help="解像度 (例 3840x2160)")
-    rd.add_argument("--duration", type=float, help="秒数 (省略時は音楽の長さ or 10秒)")
-    rd.add_argument("--out", help="出力ファイル名")
+    react = argparse.ArgumentParser(add_help=False)
+    g = react.add_argument_group("音への反応 (0 で無効。--music / sync のとき有効)")
+    g.add_argument("--bass-zoom", type=float, help="低音・キックでズーム (0.3 = 最大 +30%%)")
+    g.add_argument("--bass-fb", type=float, help="低音でフィードバックのトンネルを吸い込む (0〜1)")
+    g.add_argument("--bass-warp", type=float, help="低音で歪みを足す")
+    g.add_argument("--high-glitch", type=float, help="ハイハット等の高音のアタックでグリッチ (0〜1)")
+    g.add_argument("--high-rgb", type=float, help="高音で RGB ずれ (0〜1)")
+    g.add_argument("--kick-flash", type=float, help="キックで明るさをフラッシュ (0.2 = +20%%)")
+    g.add_argument("--mid-hue", type=float, help="中音で色相をゆっくり回す (0〜1)")
+    g.add_argument("--note-pulse", type=float, help="エレピ・鍵盤のノートで映像が呼吸する (0〜1)")
+    g.add_argument("--chord-hue", type=float, help="コードが変わるたびに色が移る (0〜1)")
+    g.add_argument("--section", action="append", metavar="範囲:名前=値,...",
+                   help="曲の一部だけ反応を変える (複数可)。例: --section 1-40:gain=2.5,note_pulse=0.6 "
+                        "(小節, 要 --bpm) / --section 0s-80s:sensitivity=1 (秒)。"
+                        "名前は上の反応の名前と gain (音量を持ち上げる倍率), sensitivity")
+    g.add_argument("--sensitivity", type=float, default=0.0,
+                   help="アタック検出の感度 (-0.5〜2, 大きいほど小さな音にも反応)")
+    g = react.add_argument_group("曲の範囲・テンポ")
+    g.add_argument("--start", type=float, default=0.0, help="書き出し開始位置(秒)")
+    g.add_argument("--bpm", type=float, help="曲のテンポ。指定すると --scenes の数字が小節数になります")
+    g.add_argument("--beats-per-bar", type=int, default=4, help="1小節の拍数 (既定 4)")
+    g.add_argument("--start-bar", type=int, help="開始小節 (1始まり, 要 --bpm)")
+    g.add_argument("--bars", type=float, help="書き出す小節数 (要 --bpm)")
+
+    def add_render_options(p):
+        p.add_argument("--size", type=size, default=(1920, 1080), help="解像度 (例 3840x2160)")
+        p.add_argument("--duration", type=float, help="秒数 (省略時は音楽の長さ or 10秒)")
+        p.add_argument("--out", help="出力ファイル名")
+        p.add_argument("--scenes", help="シーン進行 例: plasma:8,tunnel:4,kaleido:8 (シーン:秒)")
+        p.add_argument("--auto", action="store_true", help="シーンを自動で切り替える")
+        p.add_argument("--seed", type=int, default=1, help="オートモードの乱数シード")
+        p.add_argument("--set", action="append", type=param_assign, metavar="名前=値",
+                       help="パラメータ指定 (複数可) 例: --set warp=1.5 --set feedback=0.8")
+        p.add_argument("--input-video", help="撮影した動画をシンセに通す (カメラ入力の代わり)")
+        p.add_argument("--cam-mode", type=int, choices=[1, 2, 3], default=2,
+                       help="入力動画の合成: 1=スクリーン 2=ルマキー 3=ディスプレイス")
+        p.add_argument("--invert", action="store_true")
+        p.add_argument("--mirror", type=int, choices=[0, 1, 2], default=0)
+
+    rd = sub.add_parser("render", parents=[common, react], help="高解像度で動画ファイルに書き出し")
     rd.add_argument("--music", help="音楽ファイル: 映像が音に反応し、音声も動画に入ります")
-    rd.add_argument("--scenes", help="シーン進行 例: plasma:8,tunnel:4,kaleido:8 (シーン:秒)")
-    rd.add_argument("--auto", action="store_true", help="シーンを自動で切り替える")
-    rd.add_argument("--seed", type=int, default=1, help="オートモードの乱数シード")
-    rd.add_argument("--set", action="append", type=param_assign, metavar="名前=値",
-                    help="パラメータ指定 (複数可) 例: --set warp=1.5 --set feedback=0.8")
-    rd.add_argument("--input-video", help="撮影した動画をシンセに通す (カメラ入力の代わり)")
-    rd.add_argument("--cam-mode", type=int, choices=[1, 2, 3], default=2,
-                    help="入力動画の合成: 1=スクリーン 2=ルマキー 3=ディスプレイス")
-    rd.add_argument("--invert", action="store_true")
-    rd.add_argument("--mirror", type=int, choices=[0, 1, 2], default=0)
+    add_render_options(rd)
+
+    sy = sub.add_parser("sync", parents=[common, react],
+                        help="曲(WAV等)に映像を同期させて MP4 を書き出す (MV 用)")
+    sy.add_argument("music", help="書き出した曲のファイル (wav/aiff/mp3/m4a)")
+    add_render_options(sy)
+    sy.set_defaults(**SYNC_DEFAULTS)
 
     args = ap.parse_args(argv)
     if args.cmd == "live":
@@ -74,6 +114,11 @@ def main(argv=None):
             args.window = (1280, 720)
         from . import live
         return live.run(args)
+    if args.cmd == "sync" and not args.out:
+        from pathlib import Path
+
+        Path(args.outdir).mkdir(parents=True, exist_ok=True)
+        args.out = str(Path(args.outdir) / (Path(args.music).stem + "_vsynth" + CODECS[args.codec][1]))
     from . import render
     return render.run(args)
 
